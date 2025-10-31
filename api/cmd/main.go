@@ -52,6 +52,8 @@ func main() {
 		} else {
 			log.Println("New Relic initialized successfully")
 		}
+	} else {
+		log.Println("Warning: NEW_RELIC_LICENSE_KEY not set, New Relic disabled")
 	}
 
 	// Initialize MySQL

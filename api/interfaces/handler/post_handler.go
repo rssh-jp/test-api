@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/labstack/echo/v4"
+	"github.com/newrelic/go-agent/v3/newrelic"
 	"github.com/rssh-jp/test-api/api/usecase"
 )
 
@@ -21,7 +22,8 @@ func NewPostHandler(postUsecase usecase.PostUsecase) *PostHandler {
 
 // GetPosts handles GET /posts
 func (h *PostHandler) GetPosts(c echo.Context) error {
-	ctx := c.Request().Context()
+	txn := newrelic.FromContext(c.Request().Context())
+	ctx := newrelic.NewContext(c.Request().Context(), txn)
 
 	// Parse query parameters
 	page, _ := strconv.Atoi(c.QueryParam("page"))
@@ -51,7 +53,8 @@ func (h *PostHandler) GetPosts(c echo.Context) error {
 
 // GetPostByID handles GET /posts/:id
 func (h *PostHandler) GetPostByID(c echo.Context) error {
-	ctx := c.Request().Context()
+	txn := newrelic.FromContext(c.Request().Context())
+	ctx := newrelic.NewContext(c.Request().Context(), txn)
 
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
@@ -72,7 +75,8 @@ func (h *PostHandler) GetPostByID(c echo.Context) error {
 
 // GetPostBySlug handles GET /posts/slug/:slug
 func (h *PostHandler) GetPostBySlug(c echo.Context) error {
-	ctx := c.Request().Context()
+	txn := newrelic.FromContext(c.Request().Context())
+	ctx := newrelic.NewContext(c.Request().Context(), txn)
 
 	slug := c.Param("slug")
 	if slug == "" {
@@ -93,7 +97,8 @@ func (h *PostHandler) GetPostBySlug(c echo.Context) error {
 
 // GetPostsByCategory handles GET /posts/category/:slug
 func (h *PostHandler) GetPostsByCategory(c echo.Context) error {
-	ctx := c.Request().Context()
+	txn := newrelic.FromContext(c.Request().Context())
+	ctx := newrelic.NewContext(c.Request().Context(), txn)
 
 	slug := c.Param("slug")
 	if slug == "" {
@@ -124,7 +129,8 @@ func (h *PostHandler) GetPostsByCategory(c echo.Context) error {
 
 // GetPostsByTag handles GET /posts/tag/:slug
 func (h *PostHandler) GetPostsByTag(c echo.Context) error {
-	ctx := c.Request().Context()
+	txn := newrelic.FromContext(c.Request().Context())
+	ctx := newrelic.NewContext(c.Request().Context(), txn)
 
 	slug := c.Param("slug")
 	if slug == "" {
@@ -155,7 +161,8 @@ func (h *PostHandler) GetPostsByTag(c echo.Context) error {
 
 // GetFeaturedPosts handles GET /posts/featured
 func (h *PostHandler) GetFeaturedPosts(c echo.Context) error {
-	ctx := c.Request().Context()
+	txn := newrelic.FromContext(c.Request().Context())
+	ctx := newrelic.NewContext(c.Request().Context(), txn)
 
 	limit, _ := strconv.Atoi(c.QueryParam("limit"))
 	if limit < 1 {
