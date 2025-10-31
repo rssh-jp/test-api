@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/newrelic/go-agent/v3/newrelic"
 	"github.com/rssh-jp/test-api/api/domain"
 )
 
@@ -18,6 +19,17 @@ func NewUserRepository(db *sql.DB) domain.UserRepository {
 }
 
 func (r *userRepository) FindAll(ctx context.Context) ([]domain.User, error) {
+	txn := newrelic.FromContext(ctx)
+	if txn != nil {
+		segment := &newrelic.DatastoreSegment{
+			StartTime:  txn.StartSegmentNow(),
+			Product:    newrelic.DatastoreMySQL,
+			Collection: "users",
+			Operation:  "SELECT",
+		}
+		defer segment.End()
+	}
+
 	query := `SELECT id, username, email, created_at, updated_at FROM users ORDER BY created_at DESC`
 	
 	rows, err := r.db.QueryContext(ctx, query)
@@ -41,6 +53,17 @@ func (r *userRepository) FindAll(ctx context.Context) ([]domain.User, error) {
 }
 
 func (r *userRepository) FindByID(ctx context.Context, id int64) (*domain.User, error) {
+	txn := newrelic.FromContext(ctx)
+	if txn != nil {
+		segment := &newrelic.DatastoreSegment{
+			StartTime:  txn.StartSegmentNow(),
+			Product:    newrelic.DatastoreMySQL,
+			Collection: "users",
+			Operation:  "SELECT",
+		}
+		defer segment.End()
+	}
+
 	query := `SELECT id, username, email, created_at, updated_at FROM users WHERE id = ?`
 	
 	var user domain.User
@@ -53,6 +76,17 @@ func (r *userRepository) FindByID(ctx context.Context, id int64) (*domain.User, 
 }
 
 func (r *userRepository) Create(ctx context.Context, user *domain.User) error {
+	txn := newrelic.FromContext(ctx)
+	if txn != nil {
+		segment := &newrelic.DatastoreSegment{
+			StartTime:  txn.StartSegmentNow(),
+			Product:    newrelic.DatastoreMySQL,
+			Collection: "users",
+			Operation:  "INSERT",
+		}
+		defer segment.End()
+	}
+
 	query := `INSERT INTO users (username, email, password_hash, status, email_verified, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
 	now := time.Now()
 	user.CreatedAt = now
@@ -77,6 +111,17 @@ func (r *userRepository) Create(ctx context.Context, user *domain.User) error {
 }
 
 func (r *userRepository) Update(ctx context.Context, user *domain.User) error {
+	txn := newrelic.FromContext(ctx)
+	if txn != nil {
+		segment := &newrelic.DatastoreSegment{
+			StartTime:  txn.StartSegmentNow(),
+			Product:    newrelic.DatastoreMySQL,
+			Collection: "users",
+			Operation:  "UPDATE",
+		}
+		defer segment.End()
+	}
+
 	query := `UPDATE users SET username = ?, email = ?, updated_at = ? WHERE id = ?`
 	user.UpdatedAt = time.Now()
 
@@ -85,6 +130,17 @@ func (r *userRepository) Update(ctx context.Context, user *domain.User) error {
 }
 
 func (r *userRepository) Delete(ctx context.Context, id int64) error {
+	txn := newrelic.FromContext(ctx)
+	if txn != nil {
+		segment := &newrelic.DatastoreSegment{
+			StartTime:  txn.StartSegmentNow(),
+			Product:    newrelic.DatastoreMySQL,
+			Collection: "users",
+			Operation:  "DELETE",
+		}
+		defer segment.End()
+	}
+
 	query := `DELETE FROM users WHERE id = ?`
 	
 	_, err := r.db.ExecContext(ctx, query, id)

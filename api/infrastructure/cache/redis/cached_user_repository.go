@@ -11,14 +11,24 @@ import (
 	"github.com/rssh-jp/test-api/api/domain"
 )
 
+// cachedUserRepository はキャッシュのためのDecorator/Proxyパターンを実装します。
+// 任意のdomain.UserRepository実装（MySQL, PostgreSQLなど）をラップし、
+// Redisキャッシュ機能を追加します。
+//
+// クリーンアーキテクチャ的に正しい理由:
+// - domain.UserRepositoryインターフェースに依存（具体実装ではない）
+// - このクラスとラップされるリポジトリは両方ともInfrastructure層
+// - 依存関係の方向が内側を向いている（Infrastructure -> Domain）
 type cachedUserRepository struct {
-	baseRepo   domain.UserRepository
+	baseRepo    domain.UserRepository // Domainインターフェース - 任意の実装が可能
 	redisClient *redis.Client
-	ctx        context.Context
-	ttl        time.Duration
+	ctx         context.Context
+	ttl         time.Duration
 }
 
-// NewCachedUserRepository creates a new cached user repository
+// NewCachedUserRepository は新しいキャッシュ付きユーザーリポジトリを作成します。
+// baseRepoはdomain.UserRepositoryの任意の実装（MySQL, PostgreSQLなど）が使用できます。
+// Decoratorパターンに従い、透過的にキャッシュ機能を追加します。
 func NewCachedUserRepository(baseRepo domain.UserRepository, redisClient *redis.Client) domain.UserRepository {
 	return &cachedUserRepository{
 		baseRepo:    baseRepo,
