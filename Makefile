@@ -21,13 +21,6 @@ help:
 	@echo "  make load-test  - Run load test (1 req/sec, detailed output)"
 	@echo "  make load-test-simple - Run simple load test (1 req/sec)"
 	@echo "  make load-test-complex - Run complex load test (tests JOIN queries)"
-	@echo ""
-	@echo "Development commands (with hot reload):"
-	@echo "  make dev-build  - Build development Docker images"
-	@echo "  make dev-up     - Start all services in dev mode (with hot reload)"
-	@echo "  make dev-down   - Stop development services"
-	@echo "  make dev-logs   - Show logs from dev API service"
-	@echo "  make dev-restart - Restart development services"
 
 # Build Docker images
 build:
@@ -127,24 +120,3 @@ load-test-complex:
 	@echo "Starting complex load test with JOIN queries..."
 	@echo "Press Ctrl+C to stop"
 	@./scripts/complex_load_test.sh
-
-# Development commands with hot reload
-dev-build:
-	docker-compose -f resources/docker/docker-compose.dev.yml --env-file .env build
-
-dev-up:
-	@echo "Starting development environment with hot reload..."
-	docker-compose -f resources/docker/docker-compose.dev.yml --env-file .env up -d
-	@echo "API is running at http://localhost:8080 with hot reload enabled"
-	@echo "Code changes will automatically reload the server"
-
-dev-down:
-	docker-compose -f resources/docker/docker-compose.dev.yml --env-file .env down
-
-dev-logs:
-	docker-compose -f resources/docker/docker-compose.dev.yml --env-file .env logs -f api
-
-dev-restart: dev-down dev-up
-
-dev-clean:
-	docker-compose -f resources/docker/docker-compose.dev.yml --env-file .env down -v
