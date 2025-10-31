@@ -12,6 +12,7 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/newrelic/go-agent/v3/integrations/nrecho-v4"
 	_ "github.com/newrelic/go-agent/v3/integrations/nrmysql"
+	"github.com/newrelic/go-agent/v3/integrations/nrredis-v8"
 	"github.com/newrelic/go-agent/v3/newrelic"
 
 	"github.com/rssh-jp/test-api/api/gen"
@@ -97,6 +98,12 @@ func main() {
 		DB:       0,
 	})
 	defer redisClient.Close()
+
+	// Add New Relic hook to Redis client
+	if nrApp != nil {
+		redisClient.AddHook(nrredis.NewHook(redisClient.Options()))
+		log.Println("Redis will be monitored by New Relic")
+	}
 
 	// Test Redis connection
 	ctx := redisClient.Context()
