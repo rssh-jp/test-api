@@ -3,6 +3,15 @@
 ## プロジェクト概要
 このプロジェクトは、Go言語で実装されたREST APIで、クリーンアーキテクチャパターンを採用しています。MySQL、Redis、NewRelicを統合し、OpenAPI 3.0で定義されたAPIを提供します。
 
+### 技術スタック
+- **言語**: Go 1.25rc1
+- **フレームワーク**: Echo v4.12.0
+- **データベース**: MySQL 8.0
+- **キャッシュ**: Redis 7-alpine
+- **監視**: NewRelic APM v3.40.1
+- **開発環境**: Docker + reflex（ホットリロード）
+- **アーキテクチャ**: Clean Architecture + Decorator Pattern（キャッシュ層）
+
 ## アーキテクチャ原則
 
 ### クリーンアーキテクチャの層構造
@@ -48,6 +57,9 @@
   - プリペアドステートメントを使用してSQLインジェクションを防止
   - `sql.NullXXX`型を使ってNULL値を適切に処理
   - トランザクションが必要な場合は明示的に開始/コミット/ロールバック
+  - **複雑なJOIN**: 正規化されたテーブルからデータを集約する場合、複数のクエリを組み合わせる
+    - 例: ユーザー詳細取得（users + user_profiles + posts + comments + follows + notifications）
+    - NewRelic DatastoreSegmentで`Operation: "SELECT_WITH_JOINS"`を使用してパフォーマンス監視
 
 ### キャッシュ戦略
 - **Redis**:
@@ -55,6 +67,9 @@
   - 書き込み: DB更新後、関連キャッシュを無効化（Cache-Aside パターン）
   - TTL: デフォルト5分、用途に応じて調整可能
   - キーの命名: `リソース名:ID` 形式（例: `user:123`）
+  - **Decorator Pattern**: `cached_*_repository.go`でリポジトリをラップ
+    - 元のリポジトリを内部に保持（`api/infrastructure/cache/redis/cached_user_repository.go`参照）
+    - クリーンアーキテクチャに準拠（Domain層のインターフェースに依存）
 
 ### OpenAPI統合
 - **定義ファイル**: `resources/openapi/openapi.yaml`
@@ -152,18 +167,41 @@ func TestUsecase(t *testing.T) {
 }
 ```
 
+## 開発環境
+
+### ホットリロード
+- **reflex**: ファイル変更を検知して自動再ビルド・再起動
+- **設定ファイル**: `api/reflex.conf`
+- **監視対象**: `.go`ファイルと`openapi.yaml`
+- **除外**: `api/gen/`ディレクトリ（生成コードの無限ループ防止）
+- **動作**: OpenAPI定義変更時も自動でコード生成＆再起動
+
+### Dockerfile構成
+- **ベースイメージ**: `golang:1.25rc1-alpine`
+- **開発モード**: ソースコードはボリュームマウント（`docker-compose.yml`）
+- **本番ビルド**: `make prod-build`で最適化されたイメージ作成
+
 ## Docker & Makefile
 
 ### よく使うコマンド
 ```bash
-make build      # Dockerイメージのビルド
-make up         # サービス起動
-make down       # サービス停止
-make restart    # 再起動
-make logs-api   # APIログ表示
-make generate   # OpenAPIコード生成
-make test       # テスト実行
-make clean      # 完全クリーンアップ
+# 開発用（デフォルト・ホットリロード有効）
+make build         # Dockerイメージのビルド
+make up            # サービス起動（開発モード）
+make down          # サービス停止
+make restart       # 再起動
+make logs-api      # APIログ表示
+make generate      # OpenAPIコード生成
+make test          # テスト実行
+make clean         # 完全クリーンアップ
+
+# 本番用
+make prod-build    # 本番用イメージビルド
+make prod-up       # 本番モードで起動
+make prod-down     # 本番モード停止
+
+# 負荷テスト
+make load-test-simple  # 全GETエンドポイントの負荷テスト
 ```
 
 ### 環境変数
@@ -190,13 +228,65 @@ make clean      # 完全クリーンアップ
 
 ## NewRelic統合
 
-### モニタリング対象
-- HTTPリクエスト/レスポンス（自動）
-- データベースクエリ（要ラッパー実装）
-- Redisコマンド（要インテグレーション）
-- カスタムトランザクション（必要に応じて）
+### 必須パッケージ
+```go
+import (
+    "github.com/newrelic/go-agent/v3/newrelic"
+    "github.com/newrelic/go-agent/v3/integrations/nrecho-v4"  // Echo統合
+    "github.com/newrelic/go-agent/v3/integrations/nrmysql"     // MySQL統合
+    "github.com/newrelic/go-agent/v3/integrations/nrredis-v8"  // Redis統合
+)
+```
 
-### トランザクション作成
+### モニタリング対象
+- **HTTPリクエスト**: nrecho-v4ミドルウェアで自動トレース
+- **MySQLクエリ**: DatastoreSegmentで明示的にトレース（必須）
+- **Redis操作**: nrredis-v8フックで自動トレース
+- **カスタムトランザクション**: 必要に応じて追加
+
+### Handler層でのコンテキスト伝播（必須パターン）
+```go
+func (h *Handler) GetUser(c echo.Context) error {
+    // NewRelicトランザクションを取得
+    txn := newrelic.FromContext(c.Request().Context())
+    
+    // 新しいコンテキストを作成（Usecase/Repositoryに渡す）
+    ctx := newrelic.NewContext(c.Request().Context(), txn)
+    
+    // Usecaseを呼び出す
+    user, err := h.usecase.GetUserByID(ctx, id)
+    // ...
+}
+```
+
+### MySQL Repository層でのトレース（必須パターン）
+```go
+func (r *userRepository) FindByID(ctx context.Context, id int64) (*domain.User, error) {
+    // DatastoreSegmentを作成（NewRelicでクエリをトレース）
+    segment := newrelic.DatastoreSegment{
+        Product:    newrelic.DatastoreMySQL,
+        Collection: "users",              // テーブル名
+        Operation:  "SELECT",             // 操作種別
+        StartTime:  newrelic.FromContext(ctx).StartSegmentNow(),
+    }
+    defer segment.End()
+    
+    // SQLクエリ実行
+    row := r.db.QueryRowContext(ctx, "SELECT * FROM users WHERE id = ?", id)
+    // ...
+}
+```
+
+### Redis統合の初期化
+```go
+// Redisクライアント作成時にフックを追加
+redisClient := redis.NewClient(&redis.Options{
+    Addr: redisAddr,
+})
+redisClient.AddHook(nrredis.NewHook(redisClient.Options()))
+```
+
+### トランザクション作成（カスタム処理用）
 ```go
 txn := nrApp.StartTransaction("CustomOperation")
 defer txn.End()
@@ -207,6 +297,23 @@ if err != nil {
     txn.NoticeError(err)
 }
 ```
+
+### NewRelic統合チェックリスト
+新しいハンドラーやリポジトリを追加する際は、以下を確認：
+
+✅ **Handler層**:
+- `newrelic.FromContext()`でトランザクション取得
+- `newrelic.NewContext()`でコンテキスト作成
+- Usecase呼び出し時にコンテキストを渡す
+
+✅ **Repository層（MySQL）**:
+- `newrelic.DatastoreSegment`を作成
+- `Product`, `Collection`, `Operation`を適切に設定
+- `defer segment.End()`を忘れずに
+
+✅ **Repository層（Redis）**:
+- クライアント初期化時に`nrredis.NewHook()`を追加（1回のみ）
+- 個別の操作にコードは不要（自動トレース）
 
 ## コードレビューのチェックポイント
 
@@ -241,6 +348,63 @@ if err != nil {
 ✅ テスタビリティを考慮した設計
 ✅ RESTful API設計原則の遵守
 ✅ セマンティックバージョニング
+
+## 実装済みエンドポイント
+
+### ユーザー関連
+- `GET /users` - 全ユーザー取得
+- `GET /users/:id` - ユーザーID取得
+- `GET /users/:id/detail` - ユーザー詳細（JOIN集約）
+  - ユーザー基本情報 + プロフィール
+  - フォロー統計（フォロワー数、フォロー中数）
+  - アクティビティ統計（投稿数、コメント数、総いいね数、総閲覧数）
+  - 最近の投稿（最新5件）
+  - 最近のコメント（最新5件、投稿タイトル付き）
+  - 未読通知（最新10件）
+- `GET /users/username/:username/detail` - ユーザー名で詳細取得
+- `POST /users` - ユーザー作成
+- `PUT /users/:id` - ユーザー更新
+- `DELETE /users/:id` - ユーザー削除
+
+### 投稿関連
+- `GET /posts` - 全投稿取得
+- `GET /posts/:id` - 投稿ID取得
+- `GET /posts/slug/:slug` - スラッグで取得
+- `GET /posts/featured` - 注目投稿取得
+- `GET /posts/category/:category` - カテゴリー別取得
+- `GET /posts/tag/:tag` - タグ別取得
+- `POST /posts` - 投稿作成
+- `PUT /posts/:id` - 投稿更新
+- `DELETE /posts/:id` - 投稿削除
+
+### 実装パターン例
+
+#### 複雑なJOIN集約（user_detail_repository.go）
+```go
+// 正規化されたテーブルから全関連データを集約
+func (r *userDetailRepository) FindDetailByID(ctx context.Context, id int64) (*domain.UserDetail, error) {
+    // NewRelicトレース設定
+    segment := newrelic.DatastoreSegment{
+        Product:    newrelic.DatastoreMySQL,
+        Collection: "users",
+        Operation:  "SELECT_WITH_JOINS",
+        StartTime:  newrelic.FromContext(ctx).StartSegmentNow(),
+    }
+    defer segment.End()
+    
+    // 1. ユーザー基本情報 + プロフィール（JOIN）
+    // 2. フォロワー数集計
+    // 3. フォロー中数集計
+    // 4. 投稿統計集計（件数、閲覧数、いいね数）
+    // 5. コメント数集計
+    // 6. 最近の投稿取得（最新5件）
+    // 7. 最近のコメント取得（投稿タイトルとJOIN、最新5件）
+    // 8. 未読通知取得（最新10件）
+    
+    // 各クエリを実行してUserDetail構造体に集約
+    // ...
+}
+```
 
 ## 参考資料
 

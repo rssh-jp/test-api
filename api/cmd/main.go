@@ -132,6 +132,11 @@ func main() {
 	postUsecase := usecase.NewPostUsecase(cachedPostRepo)
 	postHandler := handler.NewPostHandler(postUsecase)
 
+	// Initialize user detail service (complex JOIN queries for all user-related data)
+	userDetailRepo := mysqlRepo.NewUserDetailRepository(db)
+	userDetailUsecase := usecase.NewUserDetailUsecase(userDetailRepo)
+	userDetailHandler := handler.NewUserDetailHandler(userDetailUsecase)
+
 	// Initialize Echo
 	e := echo.New()
 
@@ -155,6 +160,10 @@ func main() {
 	e.GET("/posts/slug/:slug", postHandler.GetPostBySlug)
 	e.GET("/posts/category/:slug", postHandler.GetPostsByCategory)
 	e.GET("/posts/tag/:slug", postHandler.GetPostsByTag)
+
+	// Register user detail routes (complex JOIN queries for all user-related data)
+	e.GET("/users/:id/detail", userDetailHandler.GetUserDetailByID)
+	e.GET("/users/username/:username/detail", userDetailHandler.GetUserDetailByUsername)
 
 	// Start server
 	log.Printf("Starting server on port %s", port)
