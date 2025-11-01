@@ -6,10 +6,14 @@ Go言語で構築されたREST APIです。MySQL、Redis、NewRelicを統合し�
 
 - ✅ クリーンアーキテクチャ (Domain, Usecase, Infrastructure, Interfaces)
 - ✅ OpenAPI 3.0による API定義とコード自動生成
-- ✅ Echo Webフレームワーク
-- ✅ MySQLデータベース
-- ✅ Redisキャッシング（データとリクエスト結果）
-- ✅ NewRelic APM統合 (API, MySQL, Redis)
+- ✅ Echo Webフレームワーク v4.12.0
+- ✅ MySQLデータベース（正規化された複雑なスキーマ）
+- ✅ Redisキャッシング（Decorator Pattern）
+- ✅ キャッシュバイパス機能（`no_cache=true`パラメータ）
+- ✅ NewRelic APM統合 (HTTP, MySQL, Redis)
+- ✅ ホットリロード開発環境（reflex）
+- ✅ Swagger UI統合
+- ✅ 脆弱性チェック（govulncheck）
 - ✅ Docker Compose による環境構築
 - ✅ Makefileによる簡単操作
 
@@ -53,7 +57,7 @@ Go言語で構築されたREST APIです。MySQL、Redis、NewRelicを統合し�
 - Docker
 - Docker Compose
 - Make
-- Go 1.25.3以上（ローカル開発の場合）
+- Go 1.25rc1以上（ローカル開発の場合）
 
 ## クイックスタート
 
@@ -75,14 +79,31 @@ make setup
 - Dockerイメージのビルド
 - 全サービスの起動
 
-### 3. 動作確認
+### 3. Swagger UIでAPIを確認
+
+```bash
+# ブラウザでSwagger UIを開く
+make swagger
+# または http://localhost:8081/swagger
+```
+
+### 4. 動作確認
 
 ```bash
 # ヘルスチェック
 curl http://localhost:8080/health
 
-# ユーザー一覧取得（シンプルAPI）
+# ユーザー一覧取得（キャッシュあり）
 curl http://localhost:8080/users
+
+# ユーザー一覧取得（キャッシュバイパス）
+curl http://localhost:8080/users?no_cache=true
+
+# ユーザー詳細取得（複雑なJOIN - 7+テーブル集約）
+curl http://localhost:8080/users/1/detail
+
+# ユーザー名で詳細取得
+curl http://localhost:8080/users/username/sakura/detail
 
 # ユーザー作成
 curl -X POST http://localhost:8080/users \
@@ -110,12 +131,13 @@ curl 'http://localhost:8080/posts/featured?limit=5'
 
 ## Makefileコマンド
 
-### 本番環境
+### 基本コマンド（開発モード - ホットリロード有効）
 
 ```bash
 make help         # 利用可能なコマンド一覧を表示
 make build        # Dockerイメージをビルド
-make up           # 全サービスを起動
+make up           # 全サービスを起動（開発モード・デフォルト）
+make up-d         # バックグラウンドで起動
 make down         # 全サービスを停止
 make restart      # 全サービスを再起動
 make logs         # 全サービスのログを表示
@@ -123,26 +145,44 @@ make logs-api     # APIサービスのログを表示
 make logs-mysql   # MySQLのログを表示
 make logs-redis   # Redisのログを表示
 make clean        # サービス停止とボリューム削除
+make prune        # 全ての未使用Dockerリソースを削除（確認あり）
+```
+
+### テストとドキュメント
+
+```bash
 make test         # テストを実行
+make vulncheck    # Go脆弱性チェック（govulncheck）
+make vulncheck-verbose # 詳細な脆弱性レポート
 make generate     # OpenAPIコードをローカルで生成
+make swagger      # Swagger UIを開く（http://localhost:8081/swagger）
+```
+
+### ユーティリティ
+
+```bash
 make shell-api    # APIコンテナのシェルを開く
 make mysql-cli    # MySQL CLIを開く
 make redis-cli    # Redis CLIを開く
-make load-test    # ロードテスト実行（詳細出力）
-make load-test-simple # シンプルロードテスト実行
 ```
 
-### 開発環境（Hot Reload対応）
+### 負荷テスト
 
 ```bash
-make dev-build    # 開発用Dockerイメージをビルド（reflex込み）
-make dev-up       # 開発環境を起動（ホットリロード有効）
-make dev-down     # 開発環境を停止
-make dev-restart  # 開発環境を再起動
-make dev-logs     # 開発環境のログを表示
+make load-test-simple           # 全GETエンドポイントの負荷テスト（キャッシュあり）
+./scripts/simple_load_test.sh --no-cache  # キャッシュバイパスモードで負荷テスト
+make load-test-complex          # 複雑なJOINクエリの負荷テスト
 ```
 
-開発環境では、`api/`ディレクトリのGoファイルを編集すると、reflexが自動的に変更を検知してアプリケーションを再起動します（約1-2秒）。
+### 本番環境用
+
+```bash
+make prod-build   # 本番用Dockerイメージをビルド
+make prod-up      # 本番モードで起動
+make prod-down    # 本番モードを停止
+```
+
+開発モード（デフォルト）では、`api/`ディレクトリのGoファイルや`openapi.yaml`を編集すると、reflexが自動的に変更を検知してアプリケーションを再起動します（約1-2秒）。
 
 ## ロードテスト
 
@@ -283,14 +323,27 @@ ORDER BY p.published_at DESC;
 
 OpenAPI仕様は `resources/openapi/openapi.yaml` に定義されています。
 
-### ユーザーAPI（シンプル）
+**Swagger UI**: http://localhost:8081/swagger で全エンドポイントを確認・テスト可能
 
+### ユーザーAPI
+
+#### 基本操作
 - `GET /health` - ヘルスチェック
 - `GET /users` - ユーザー一覧取得
 - `GET /users/{id}` - ユーザー詳細取得
 - `POST /users` - ユーザー作成
 - `PUT /users/{id}` - ユーザー更新
 - `DELETE /users/{id}` - ユーザー削除
+
+#### ユーザー詳細（複雑なJOIN）
+- `GET /users/{id}/detail` - ユーザー詳細情報（7+テーブル集約）
+  - ユーザー基本情報 + プロフィール
+  - フォロー統計（フォロワー数、フォロー中数）
+  - アクティビティ統計（投稿数、コメント数、総いいね数、総閲覧数）
+  - 最近の投稿（最新5件）
+  - 最近のコメント（最新5件、投稿タイトル付き）
+  - 未読通知（最新10件）
+- `GET /users/username/{username}/detail` - ユーザー名で詳細取得
 
 ### 投稿API（複雑なJOIN）
 
@@ -301,18 +354,55 @@ OpenAPI仕様は `resources/openapi/openapi.yaml` に定義されています。
 - `GET /posts/tag/{slug}` - タグ別投稿取得
 - `GET /posts/featured?limit=10` - 注目投稿取得
 
+### キャッシュバイパス
+
+全てのGETエンドポイントで`no_cache=true`パラメータを使用可能：
+
+```bash
+# キャッシュを使用（通常）
+curl http://localhost:8080/users/1
+
+# キャッシュをバイパス（DB直接アクセス）
+curl http://localhost:8080/users/1?no_cache=true
+```
+
 ## キャッシング戦略
 
-Redisは以下のようにキャッシュを管理します：
+Redisは**Decorator Pattern**でキャッシュを管理します：
+
+### アーキテクチャ
+```
+Handler → Usecase → CachedRepository (Decorator)
+                         ↓
+                    [Redis Check]
+                         ↓
+                    BaseRepository → MySQL
+```
+
+### 動作
 
 1. **読み取り操作**:
    - まずRedisキャッシュを確認
-   - キャッシュミスの場合、MySQLから取得してキャッシュに保存
+   - キャッシュヒット: Redisから返却（高速）
+   - キャッシュミス: MySQLから取得してキャッシュに保存
    - TTL: 5分
 
 2. **書き込み操作**:
    - MySQLへの書き込み後、関連キャッシュを無効化
    - 次回読み取り時に新しいデータがキャッシュされる
+
+3. **キャッシュバイパス** (`no_cache=true`):
+   - Handler層で直接DBアクセス用のUsecaseを選択
+   - キャッシュ層を完全にスキップしてMySQL直接アクセス
+   - デバッグや最新データ確認時に使用
+
+### ログ出力例
+```
+✓ Redis Cache HIT: user:1
+✗ Redis Cache MISS: user:5 - Fetching from MySQL
+→ Redis Cache SET: user:5 (TTL: 5m0s)
+⚠ Redis Cache INVALIDATE: user:1 (updated)
+```
 
 ## NewRelic統合
 
@@ -380,13 +470,18 @@ reflex -r '\.go$' -s -- go run api/cmd/main.go
 
 ### 技術スタック
 
-- **言語**: Go 1.25.3
+- **言語**: Go 1.25rc1
 - **Webフレームワーク**: Echo v4.12.0
 - **データベース**: MySQL 8.0 (utf8mb4)
-- **キャッシュ**: Redis 7
-- **APM**: NewRelic v3
+- **キャッシュ**: Redis 7-alpine
+- **APM**: NewRelic Go Agent v3.40.1
+  - nrecho-v4 v1.1.2 (HTTP tracing)
+  - nrmysql v1.2.2 (MySQL tracing)
+  - nrredis-v8 v1.0.3 (Redis tracing)
 - **ホットリロード**: Reflex
 - **コード生成**: oapi-codegen
+- **API ドキュメント**: Swagger UI
+- **脆弱性チェック**: govulncheck
 - **コンテナ**: Docker & Docker Compose
 
 ## トラブルシューティング

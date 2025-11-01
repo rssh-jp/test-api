@@ -83,6 +83,9 @@
   ```
 - **型変換**: OpenAPI生成型（`openapi_types.Email`など）と内部型を適切に変換
 - **ハンドラー実装**: `gen.ServerInterface`を実装
+- **Swagger UI**: `http://localhost:8081/swagger` でAPIドキュメントを表示
+  - `make swagger`コマンドでブラウザを開く
+  - `docker-compose.yml`の`swagger-ui`サービスで提供
 
 ## 新機能追加時の手順
 
@@ -181,7 +184,7 @@ func TestUsecase(t *testing.T) {
 - **動作**: OpenAPI定義変更時も自動でコード生成＆再起動
 
 ### Dockerfile構成
-- **ベースイメージ**: `golang:1.25rc1-alpine`
+- **ベースイメージ**: `golang:1.25.3-alpine`
 - **開発モード**: ソースコードはボリュームマウント（`docker-compose.yml`）
 - **本番ビルド**: `make prod-build`で最適化されたイメージ作成
 
@@ -198,6 +201,7 @@ make logs-api      # APIログ表示
 make generate      # OpenAPIコード生成
 make test          # テスト実行
 make clean         # 完全クリーンアップ
+make swagger       # Swagger UIを開く（http://localhost:8081/swagger）
 
 # 本番用
 make prod-build    # 本番用イメージビルド

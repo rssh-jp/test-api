@@ -74,6 +74,21 @@ services:
       - test-api-network
     restart: unless-stopped
 
+  # Swagger UI for API Documentation
+  swagger-ui:
+    image: swaggerapi/swagger-ui:latest
+    container_name: test-api-swagger-ui
+    environment:
+      SWAGGER_JSON: /openapi/openapi.yaml
+      BASE_URL: /swagger
+    ports:
+      - "8081:8080"
+    volumes:
+      - ../../resources/openapi:/openapi:ro
+    networks:
+      - test-api-network
+    restart: unless-stopped
+
 volumes:
   mysql_data:
   redis_data:

@@ -20,6 +20,7 @@ help:
 	@echo "  make shell-api  - Open shell in API container"
 	@echo "  make mysql-cli  - Open MySQL CLI"
 	@echo "  make redis-cli  - Open Redis CLI"
+	@echo "  make swagger    - Open Swagger UI in browser"
 	@echo "  make load-test  - Run load test (1 req/sec, detailed output)"
 	@echo "  make load-test-simple - Run simple load test (1 req/sec)"
 	@echo "  make load-test-complex - Run complex load test (tests JOIN queries)"
@@ -108,6 +109,13 @@ mysql-cli:
 # Open Redis CLI
 redis-cli:
 	docker-compose -f resources/docker/docker-compose.yml --env-file .env exec redis redis-cli
+
+# Open Swagger UI in browser
+swagger:
+	@echo "Opening Swagger UI at http://localhost:8081/swagger"
+	@command -v xdg-open > /dev/null && xdg-open http://localhost:8081/swagger || \
+	command -v open > /dev/null && open http://localhost:8081/swagger || \
+	echo "Please open http://localhost:8081/swagger in your browser"
 
 # Initial setup
 setup: generate build up
