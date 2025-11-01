@@ -14,6 +14,7 @@ help:
 	@echo "  make clean      - Stop services and remove volumes"
 	@echo "  make prune      - Remove all unused Docker resources (WARNING: destructive)"
 	@echo "  make test       - Run tests"
+	@echo "  make vulncheck  - Run Go vulnerability check (govulncheck)"
 	@echo "  make generate   - Generate OpenAPI code locally"
 	@echo "  make shell-api  - Open shell in API container"
 	@echo "  make mysql-cli  - Open MySQL CLI"
@@ -74,6 +75,13 @@ prune:
 # Run tests
 test:
 	cd api && go test -v ./...
+
+# Run Go vulnerability check
+vulncheck:
+	@echo "Installing govulncheck..."
+	@go install golang.org/x/vuln/cmd/govulncheck@latest
+	@echo "Running vulnerability check..."
+	@cd api && govulncheck ./...
 
 # Generate OpenAPI code locally
 generate:
