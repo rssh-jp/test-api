@@ -14,14 +14,28 @@ import (
 )
 
 type UserHandler struct {
-	userUsecase usecase.UserUsecase
+	userUsecase       usecase.UserUsecase // キャッシュ層を使う（デフォルト）
+	directUserUsecase usecase.UserUsecase // キャッシュをバイパスしてDB直接アクセス
 }
 
 // NewUserHandler creates a new user handler
-func NewUserHandler(userUsecase usecase.UserUsecase) gen.ServerInterface {
+// userUsecase: キャッシュ層を経由するユースケース
+// directUserUsecase: キャッシュをバイパスしてDB直接アクセスするユースケース
+func NewUserHandler(userUsecase usecase.UserUsecase, directUserUsecase usecase.UserUsecase) gen.ServerInterface {
 	return &UserHandler{
-		userUsecase: userUsecase,
+		userUsecase:       userUsecase,
+		directUserUsecase: directUserUsecase,
 	}
+}
+
+// selectUsecase はクエリパラメータに応じて使用するユースケースを選択します
+// no_cache=true が指定された場合はキャッシュをバイパス
+func (h *UserHandler) selectUsecase(ctx echo.Context) usecase.UserUsecase {
+	noCache := ctx.QueryParam("no_cache")
+	if noCache == "true" || noCache == "1" {
+		return h.directUserUsecase
+	}
+	return h.userUsecase
 }
 
 // HealthCheck implements the health check endpoint
@@ -37,7 +51,8 @@ func (h *UserHandler) HealthCheck(ctx echo.Context) error {
 func (h *UserHandler) GetUsers(ctx echo.Context) error {
 	txn := newrelic.FromContext(ctx.Request().Context())
 	reqCtx := newrelic.NewContext(ctx.Request().Context(), txn)
-	users, err := h.userUsecase.GetAllUsers(reqCtx)
+	uc := h.selectUsecase(ctx) // クエリパラメータに応じてユースケースを選択
+	users, err := uc.GetAllUsers(reqCtx)
 	if err != nil {
 		return ctx.JSON(http.StatusInternalServerError, gen.Error{
 			Message: "Failed to retrieve users",
@@ -64,7 +79,8 @@ func (h *UserHandler) GetUsers(ctx echo.Context) error {
 func (h *UserHandler) GetUserById(ctx echo.Context, id int64) error {
 	txn := newrelic.FromContext(ctx.Request().Context())
 	reqCtx := newrelic.NewContext(ctx.Request().Context(), txn)
-	user, err := h.userUsecase.GetUserByID(reqCtx, id)
+	uc := h.selectUsecase(ctx) // クエリパラメータに応じてユースケースを選択
+	user, err := uc.GetUserByID(reqCtx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ctx.JSON(http.StatusNotFound, gen.Error{
@@ -99,7 +115,8 @@ func (h *UserHandler) CreateUser(ctx echo.Context) error {
 
 	txn := newrelic.FromContext(ctx.Request().Context())
 	reqCtx := newrelic.NewContext(ctx.Request().Context(), txn)
-	user, err := h.userUsecase.CreateUser(reqCtx, req.Name, string(req.Email), req.Age)
+	uc := h.selectUsecase(ctx) // クエリパラメータに応じてユースケースを選択
+	user, err := uc.CreateUser(reqCtx, req.Name, string(req.Email), req.Age)
 	if err != nil {
 		return ctx.JSON(http.StatusInternalServerError, gen.Error{
 			Message: "Failed to create user",
@@ -135,8 +152,9 @@ func (h *UserHandler) UpdateUser(ctx echo.Context, id int64) error {
 
 	txn := newrelic.FromContext(ctx.Request().Context())
 	reqCtx := newrelic.NewContext(ctx.Request().Context(), txn)
+	uc := h.selectUsecase(ctx) // クエリパラメータに応じてユースケースを選択
 
-	user, err := h.userUsecase.UpdateUser(reqCtx, id, req.Name, email, req.Age)
+	user, err := uc.UpdateUser(reqCtx, id, req.Name, email, req.Age)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ctx.JSON(http.StatusNotFound, gen.Error{
@@ -164,8 +182,9 @@ func (h *UserHandler) UpdateUser(ctx echo.Context, id int64) error {
 func (h *UserHandler) DeleteUser(ctx echo.Context, id int64) error {
 	txn := newrelic.FromContext(ctx.Request().Context())
 	reqCtx := newrelic.NewContext(ctx.Request().Context(), txn)
+	uc := h.selectUsecase(ctx) // クエリパラメータに応じてユースケースを選択
 
-	err := h.userUsecase.DeleteUser(reqCtx, id)
+	err := uc.DeleteUser(reqCtx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ctx.JSON(http.StatusNotFound, gen.Error{

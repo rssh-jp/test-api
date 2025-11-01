@@ -70,6 +70,10 @@
   - **Decorator Pattern**: `cached_*_repository.go`でリポジトリをラップ
     - 元のリポジトリを内部に保持（`api/infrastructure/cache/redis/cached_user_repository.go`参照）
     - クリーンアーキテクチャに準拠（Domain層のインターフェースに依存）
+  - **キャッシュバイパス**: クエリパラメータ`no_cache=true`でキャッシュをスキップしてDB直接アクセス
+    - 例: `GET /users/1?no_cache=true`
+    - デバッグや最新データ確認時に使用
+    - Handler層で`selectUsecase()`メソッドを使って切り替え
 
 ### OpenAPI統合
 - **定義ファイル**: `resources/openapi/openapi.yaml`
@@ -201,7 +205,8 @@ make prod-up       # 本番モードで起動
 make prod-down     # 本番モード停止
 
 # 負荷テスト
-make load-test-simple  # 全GETエンドポイントの負荷テスト
+make load-test-simple           # 全GETエンドポイントの負荷テスト（キャッシュあり）
+./scripts/simple_load_test.sh --no-cache  # キャッシュバイパスモードで負荷テスト
 ```
 
 ### 環境変数

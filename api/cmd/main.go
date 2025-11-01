@@ -123,14 +123,18 @@ func main() {
 	// Initialize repositories and services
 	baseUserRepo := mysqlRepo.NewUserRepository(db)
 	cachedUserRepo := redisCache.NewCachedUserRepository(baseUserRepo, redisClient)
+	// ユーザーハンドラーにキャッシュ層とDB直接アクセス層の両方を渡す
 	userUsecase := usecase.NewUserUsecase(cachedUserRepo)
-	userHandler := handler.NewUserHandler(userUsecase)
+	directUserUsecase := usecase.NewUserUsecase(baseUserRepo)
+	userHandler := handler.NewUserHandler(userUsecase, directUserUsecase)
 
 	// Initialize post-related services (complex JOIN queries with Redis cache)
 	basePostRepo := mysqlRepo.NewPostRepository(db)
 	cachedPostRepo := redisCache.NewCachedPostRepository(basePostRepo, redisClient)
+	// 投稿ハンドラーにキャッシュ層とDB直接アクセス層の両方を渡す
 	postUsecase := usecase.NewPostUsecase(cachedPostRepo)
-	postHandler := handler.NewPostHandler(postUsecase)
+	directPostUsecase := usecase.NewPostUsecase(basePostRepo)
+	postHandler := handler.NewPostHandler(postUsecase, directPostUsecase)
 
 	// Initialize user detail service (complex JOIN queries for all user-related data)
 	userDetailRepo := mysqlRepo.NewUserDetailRepository(db)
