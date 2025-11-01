@@ -151,12 +151,21 @@ make prune        # 全ての未使用Dockerリソースを削除（確認あり
 ### テストとドキュメント
 
 ```bash
-make test         # テストを実行
+make test         # ユニットテストを実行
+make test-api     # API統合テスト（動作確認スクリプト）
+make test-api-perf # API パフォーマンステスト（10回イテレーション）
 make vulncheck    # Go脆弱性チェック（govulncheck）
 make vulncheck-verbose # 詳細な脆弱性レポート
 make generate     # OpenAPIコードをローカルで生成
 make swagger      # Swagger UIを開く（http://localhost:8081/swagger）
 ```
+
+**API統合テスト** (`make test-api`) は以下を自動確認します：
+- ✅ ヘルスチェック
+- ✅ ユーザー取得（一覧・個別）
+- ✅ キャッシュバイパス機能
+- ✅ パフォーマンス比較（キャッシュあり/なし）
+- ✅ OpenAPIパラメータ（型安全性）
 
 ### ユーティリティ
 

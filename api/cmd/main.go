@@ -126,7 +126,10 @@ func main() {
 	// ユーザーハンドラーにキャッシュ層とDB直接アクセス層の両方を渡す
 	userUsecase := usecase.NewUserUsecase(cachedUserRepo)
 	directUserUsecase := usecase.NewUserUsecase(baseUserRepo)
-	userHandler := handler.NewUserHandler(userUsecase, directUserUsecase)
+	
+	// V2: フレームワーク非依存ハンドラーを作成し、ブリッジ経由でEchoに接続
+	userHandlerV2 := handler.NewUserHandlerV2(userUsecase, directUserUsecase)
+	userHandler := handler.NewUserHandlerBridge(userHandlerV2)
 
 	// Initialize post-related services (complex JOIN queries with Redis cache)
 	basePostRepo := mysqlRepo.NewPostRepository(db)
@@ -134,12 +137,18 @@ func main() {
 	// 投稿ハンドラーにキャッシュ層とDB直接アクセス層の両方を渡す
 	postUsecase := usecase.NewPostUsecase(cachedPostRepo)
 	directPostUsecase := usecase.NewPostUsecase(basePostRepo)
-	postHandler := handler.NewPostHandler(postUsecase, directPostUsecase)
+	
+	// V2: フレームワーク非依存ハンドラーを作成し、ブリッジ経由でEchoに接続
+	postHandlerV2 := handler.NewPostHandlerV2(postUsecase, directPostUsecase)
+	postHandler := handler.NewPostHandlerBridge(postHandlerV2)
 
 	// Initialize user detail service (complex JOIN queries for all user-related data)
 	userDetailRepo := mysqlRepo.NewUserDetailRepository(db)
 	userDetailUsecase := usecase.NewUserDetailUsecase(userDetailRepo)
-	userDetailHandler := handler.NewUserDetailHandler(userDetailUsecase)
+	
+	// V2: フレームワーク非依存ハンドラーを作成し、ブリッジ経由でEchoに接続
+	userDetailHandlerV2 := handler.NewUserDetailHandlerV2(userDetailUsecase)
+	userDetailHandler := handler.NewUserDetailHandlerBridge(userDetailHandlerV2)
 
 	// Initialize Echo
 	e := echo.New()

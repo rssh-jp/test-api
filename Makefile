@@ -78,6 +78,16 @@ prune:
 test:
 	cd api && go test -v ./...
 
+# Run API integration tests
+test-api:
+	@echo "Running API integration tests..."
+	@bash scripts/test_api.sh
+
+# Run API tests with custom iterations
+test-api-perf:
+	@echo "Running API performance tests (10 iterations)..."
+	@ITERATIONS=10 bash scripts/test_api.sh
+
 # Run Go vulnerability check
 vulncheck:
 	@echo "Running vulnerability check in Docker container..."
