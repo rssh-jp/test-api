@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs clean test generate
+.PHONY: help build up down restart logs clean test vulncheck generate
 
 # Default target
 help:
@@ -15,6 +15,7 @@ help:
 	@echo "  make prune      - Remove all unused Docker resources (WARNING: destructive)"
 	@echo "  make test       - Run tests"
 	@echo "  make vulncheck  - Run Go vulnerability check (govulncheck)"
+	@echo "  make vulncheck-verbose - Run vulnerability check with verbose output"
 	@echo "  make generate   - Generate OpenAPI code locally"
 	@echo "  make shell-api  - Open shell in API container"
 	@echo "  make mysql-cli  - Open MySQL CLI"
@@ -78,10 +79,14 @@ test:
 
 # Run Go vulnerability check
 vulncheck:
-	@echo "Installing govulncheck..."
-	@go install golang.org/x/vuln/cmd/govulncheck@latest
-	@echo "Running vulnerability check..."
-	@cd api && govulncheck ./...
+	@echo "Running vulnerability check in Docker container..."
+	@echo "Note: Exit code 3 means vulnerabilities found but may be indirect dependencies"
+	@docker-compose -f resources/docker/docker-compose.yml --env-file .env exec api sh -c "go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck ./..." || true
+
+# Run Go vulnerability check with verbose output
+vulncheck-verbose:
+	@echo "Running detailed vulnerability check in Docker container..."
+	docker-compose -f resources/docker/docker-compose.yml --env-file .env exec api sh -c "go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck -show verbose ./..."
 
 # Generate OpenAPI code locally
 generate:

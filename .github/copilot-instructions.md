@@ -207,6 +207,10 @@ make prod-down     # 本番モード停止
 # 負荷テスト
 make load-test-simple           # 全GETエンドポイントの負荷テスト（キャッシュあり）
 ./scripts/simple_load_test.sh --no-cache  # キャッシュバイパスモードで負荷テスト
+
+# 脆弱性チェック
+make vulncheck                  # Go脆弱性チェック（govulncheck）
+make vulncheck-verbose          # 詳細な脆弱性レポート
 ```
 
 ### 環境変数
@@ -222,6 +226,14 @@ make load-test-simple           # 全GETエンドポイントの負荷テスト�
 - **パスワード**: 平文保存禁止、bcryptでハッシュ化
 - **API Key**: 環境変数で管理、コードに直接記述しない
 - **ログ**: 機密情報（パスワード、トークン等）をログに出力しない
+
+### 脆弱性チェック
+- **govulncheck**: Go公式の脆弱性チェックツール
+  - `make vulncheck`: 基本的な脆弱性チェック
+  - `make vulncheck-verbose`: 詳細レポート表示
+  - 定期的に実行して依存パッケージの脆弱性を確認
+  - 間接依存（indirect）の脆弱性も検出される
+  - 修正可能な場合は依存パッケージをアップデート
 
 ## パフォーマンス
 

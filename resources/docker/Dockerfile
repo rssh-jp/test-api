@@ -1,5 +1,5 @@
 # Development stage with hot reload
-FROM golang:1.25rc1-alpine
+FROM golang:1.25.3-alpine
 
 WORKDIR /app
 
