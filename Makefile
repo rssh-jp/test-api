@@ -64,14 +64,14 @@ clean:
 # Prune all Docker resources (containers, images, volumes, networks)
 prune:
 	@echo "Warning: This will remove all unused Docker resources!"
-	@read -p "Are you sure? [y/N] " -n 1 -r; \
+	@bash -c 'read -p "Are you sure? [y/N] " -n 1 -r; \
 	echo; \
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
 		docker system prune -a --volumes -f; \
 		echo "Docker resources pruned successfully!"; \
 	else \
 		echo "Prune cancelled."; \
-	fi
+	fi'
 
 # Run tests
 test:
