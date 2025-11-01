@@ -24,19 +24,29 @@ func (r *userDetailRepository) FindDetailByID(ctx context.Context, id int64) (*d
 			StartTime:  txn.StartSegmentNow(),
 			Product:    newrelic.DatastoreMySQL,
 			Collection: "users",
-			Operation:  "SELECT_WITH_JOINS",
+			Operation:  "SELECT_WITH_SUBQUERIES",
 		}
 		defer segment.End()
 	}
 
 	detail := &domain.UserDetail{}
 
-	// 1. ユーザー基本情報 + プロフィール情報を取得
+	// クエリ1: ユーザー基本情報 + プロフィール + 全統計（サブクエリで集計）
+	// 8クエリ → 4クエリに最適化（サブクエリ活用）
 	query := `
 		SELECT 
 			u.id, u.username, u.email, u.status, u.email_verified, u.last_login_at, u.created_at, u.updated_at,
 			p.first_name, p.last_name, p.display_name, p.bio, p.avatar_url, p.birth_date, 
-			p.gender, p.country_code, p.timezone, p.language_code, p.phone_number, p.website_url
+			p.gender, p.country_code, p.timezone, p.language_code, p.phone_number, p.website_url,
+			-- フォロー統計（サブクエリ）
+			(SELECT COUNT(*) FROM user_follows WHERE following_id = u.id) as follower_count,
+			(SELECT COUNT(*) FROM user_follows WHERE follower_id = u.id) as following_count,
+			-- 投稿統計（サブクエリ）
+			(SELECT COUNT(*) FROM posts WHERE user_id = u.id AND status = 'published') as post_count,
+			(SELECT COALESCE(SUM(view_count), 0) FROM posts WHERE user_id = u.id AND status = 'published') as total_views,
+			(SELECT COALESCE(SUM(like_count), 0) FROM posts WHERE user_id = u.id AND status = 'published') as total_likes,
+			-- コメント数（サブクエリ）
+			(SELECT COUNT(*) FROM comments WHERE user_id = u.id AND status = 'approved') as comment_count
 		FROM users u
 		LEFT JOIN user_profiles p ON u.id = p.user_id
 		WHERE u.id = ?
@@ -49,39 +59,17 @@ func (r *userDetailRepository) FindDetailByID(ctx context.Context, id int64) (*d
 		&profile.FirstName, &profile.LastName, &profile.DisplayName, &profile.Bio, &profile.AvatarURL,
 		&profile.BirthDate, &profile.Gender, &profile.CountryCode, &profile.Timezone, 
 		&profile.Language, &profile.PhoneNumber, &profile.WebsiteURL,
+		// 統計情報
+		&detail.FollowStats.FollowerCount, &detail.FollowStats.FollowingCount,
+		&detail.Stats.PostCount, &detail.Stats.TotalViews, &detail.Stats.TotalLikes,
+		&detail.Stats.CommentCount,
 	)
 	if err != nil {
 		return nil, err
 	}
 	detail.Profile = &profile
 
-	// 2. フォロー統計を取得
-	followerQuery := `SELECT COUNT(*) FROM user_follows WHERE following_id = ?`
-	followingQuery := `SELECT COUNT(*) FROM user_follows WHERE follower_id = ?`
-	
-	r.db.QueryRowContext(ctx, followerQuery, id).Scan(&detail.FollowStats.FollowerCount)
-	r.db.QueryRowContext(ctx, followingQuery, id).Scan(&detail.FollowStats.FollowingCount)
-
-	// 3. 投稿統計を取得
-	statsQuery := `
-		SELECT 
-			COUNT(*) as post_count,
-			COALESCE(SUM(view_count), 0) as total_views,
-			COALESCE(SUM(like_count), 0) as total_likes
-		FROM posts 
-		WHERE user_id = ? AND status = 'published'
-	`
-	r.db.QueryRowContext(ctx, statsQuery, id).Scan(
-		&detail.Stats.PostCount, 
-		&detail.Stats.TotalViews, 
-		&detail.Stats.TotalLikes,
-	)
-
-	// 4. コメント数を取得
-	commentCountQuery := `SELECT COUNT(*) FROM comments WHERE user_id = ? AND status = 'approved'`
-	r.db.QueryRowContext(ctx, commentCountQuery, id).Scan(&detail.Stats.CommentCount)
-
-	// 5. 最近の投稿を取得（最新5件）
+	// クエリ2: 最近の投稿を取得（最新5件）
 	postsQuery := `
 		SELECT 
 			id, title, slug, excerpt, status, published_at, 
@@ -105,7 +93,7 @@ func (r *userDetailRepository) FindDetailByID(ctx context.Context, id int64) (*d
 		}
 	}
 
-	// 6. 最近のコメントを取得（最新5件）
+	// クエリ3: 最近のコメントを取得（最新5件）
 	commentsQuery := `
 		SELECT 
 			c.id, c.post_id, p.title as post_title, c.content, c.status, c.like_count, c.created_at
@@ -129,7 +117,7 @@ func (r *userDetailRepository) FindDetailByID(ctx context.Context, id int64) (*d
 		}
 	}
 
-	// 7. 未読通知を取得（最新10件）
+	// クエリ4: 未読通知を取得（最新10件）
 	notificationsQuery := `
 		SELECT id, type, title, message, link_url, is_read, created_at, read_at
 		FROM notifications
@@ -151,7 +139,7 @@ func (r *userDetailRepository) FindDetailByID(ctx context.Context, id int64) (*d
 		}
 	}
 
-	// 8. スライスをnilから空配列に初期化
+	// スライスをnilから空配列に初期化
 	if detail.RecentPosts == nil {
 		detail.RecentPosts = []domain.UserPost{}
 	}
