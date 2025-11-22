@@ -1,53 +1,58 @@
 .PHONY: help build up down restart logs clean test vulncheck generate
 
-# Default target
+# デフォルトターゲット
 help:
-	@echo "Available commands:"
-	@echo "  make build      - Build Docker images"
-	@echo "  make up         - Start all services"
-	@echo "  make down       - Stop all services"
-	@echo "  make restart    - Restart all services"
-	@echo "  make logs       - Show logs from all services"
-	@echo "  make logs-api   - Show logs from API service"
-	@echo "  make logs-mysql - Show logs from MySQL service"
-	@echo "  make logs-redis - Show logs from Redis service"
-	@echo "  make clean      - Stop services and remove volumes"
-	@echo "  make prune      - Remove all unused Docker resources (WARNING: destructive)"
-	@echo "  make test       - Run tests"
-	@echo "  make vulncheck  - Run Go vulnerability check (govulncheck)"
-	@echo "  make vulncheck-verbose - Run vulnerability check with verbose output"
-	@echo "  make generate   - Generate OpenAPI code locally"
-	@echo "  make shell-api  - Open shell in API container"
-	@echo "  make mysql-cli  - Open MySQL CLI"
-	@echo "  make redis-cli  - Open Redis CLI"
-	@echo "  make swagger    - Open Swagger UI in browser"
-	@echo "  make load-test  - Run load test (1 req/sec, detailed output)"
-	@echo "  make load-test-simple - Run simple load test (1 req/sec)"
-	@echo "  make load-test-complex - Run complex load test (tests JOIN queries)"
+	@echo "利用可能なコマンド:"
+	@echo "  make build      - Dockerイメージをビルド"
+	@echo "  make up         - 全サービスを起動（フォアグラウンド）"
+	@echo "  make up-d       - 全サービスを起動（バックグラウンド）"
+	@echo "  make down       - 全サービスを停止"
+	@echo "  make restart    - 全サービスを再起動"
+	@echo "  make logs       - 全サービスのログを表示"
+	@echo "  make logs-api   - APIサービスのログを表示"
+	@echo "  make logs-mysql - MySQLサービスのログを表示"
+	@echo "  make logs-redis - Redisサービスのログを表示"
+	@echo "  make clean      - サービスを停止してボリュームを削除"
+	@echo "  make prune      - 未使用のDockerリソースを全て削除（注意: 破壊的操作）"
+	@echo "  make test       - Goテストを実行"
+	@echo "  make test-api   - API統合テストを実行"
+	@echo "  make test-api-perf - APIパフォーマンステストを実行（10回反復）"
+	@echo "  make vulncheck  - Go脆弱性チェックを実行（govulncheck）"
+	@echo "  make vulncheck-verbose - 詳細な脆弱性チェックを実行"
+	@echo "  make generate   - OpenAPIコードを生成"
+	@echo "  make shell-api  - APIコンテナのシェルを開く"
+	@echo "  make mysql-cli  - MySQL CLIを開く"
+	@echo "  make redis-cli  - Redis CLIを開く"
+	@echo "  make swagger    - Swagger UIをブラウザで開く"
+	@echo "  make setup      - 初期セットアップ（generate, build, up）"
+	@echo "  make load-test  - 負荷テストを実行（詳細出力）"
+	@echo "  make load-test-simple - シンプルな負荷テストを実行"
+	@echo "  make load-test-complex - 複雑な負荷テストを実行（JOINクエリのテスト）"
 
-# Build Docker images
+# Dockerイメージをビルド
 build:
 	docker-compose -f resources/docker/docker-compose.yml --env-file .env build
 
-# Start all services
+# 全サービスを起動（フォアグラウンド）
 up:
 	docker-compose -f resources/docker/docker-compose.yml --env-file .env up
 
+# 全サービスを起動（バックグラウンド）
 up-d:
 	docker-compose -f resources/docker/docker-compose.yml --env-file .env up -d
 
-# Stop all services
+# 全サービスを停止
 down:
 	docker-compose -f resources/docker/docker-compose.yml --env-file .env down
 
-# Restart all services
+# 全サービスを再起動
 restart: down up
 
-# Show logs from all services
+# 全サービスのログを表示
 logs:
 	docker-compose -f resources/docker/docker-compose.yml --env-file .env logs -f
 
-# Show logs from specific services
+# 特定サービスのログを表示
 logs-api:
 	docker-compose -f resources/docker/docker-compose.yml --env-file .env logs -f api
 
@@ -57,97 +62,97 @@ logs-mysql:
 logs-redis:
 	docker-compose -f resources/docker/docker-compose.yml --env-file .env logs -f redis
 
-# Stop services and remove volumes
+# サービスを停止してボリュームを削除
 clean:
 	docker-compose -f resources/docker/docker-compose.yml --env-file .env down -v
 	rm -rf api/gen/
 
-# Prune all Docker resources (containers, images, volumes, networks)
+# 全ての未使用Dockerリソースを削除（コンテナ、イメージ、ボリューム、ネットワーク）
 prune:
-	@echo "Warning: This will remove all unused Docker resources!"
-	@bash -c 'read -p "Are you sure? [y/N] " -n 1 -r; \
+	@echo "警告: 未使用のDockerリソースを全て削除します！"
+	@bash -c 'read -p "本当に実行しますか？ [y/N] " -n 1 -r; \
 	echo; \
 	if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
 		docker system prune -a --volumes -f; \
-		echo "Docker resources pruned successfully!"; \
+		echo "Dockerリソースを削除しました！"; \
 	else \
-		echo "Prune cancelled."; \
+		echo "削除をキャンセルしました。"; \
 	fi'
 
-# Run tests
+# Goテストを実行
 test:
 	cd api && go test -v ./...
 
-# Run API integration tests
+# API統合テストを実行
 test-api:
-	@echo "Running API integration tests..."
+	@echo "API統合テストを実行中..."
 	@bash scripts/test_api.sh
 
-# Run API tests with custom iterations
+# APIパフォーマンステストを実行（10回反復）
 test-api-perf:
-	@echo "Running API performance tests (10 iterations)..."
+	@echo "APIパフォーマンステストを実行中（10回反復）..."
 	@ITERATIONS=10 bash scripts/test_api.sh
 
-# Run Go vulnerability check
+# Go脆弱性チェックを実行
 vulncheck:
-	@echo "Running vulnerability check in Docker container..."
-	@echo "Note: Exit code 3 means vulnerabilities found but may be indirect dependencies"
-	@docker-compose -f resources/docker/docker-compose.yml --env-file .env exec api sh -c "go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck ./..." || true
+	@echo "脆弱性チェックを実行中..."
+	@echo "注意: 終了コード3は脆弱性が見つかったが間接的な依存関係の可能性があります"
+	@cd api && go run golang.org/x/vuln/cmd/govulncheck@latest ./... || true
 
-# Run Go vulnerability check with verbose output
+# 詳細な脆弱性チェックを実行
 vulncheck-verbose:
-	@echo "Running detailed vulnerability check in Docker container..."
-	docker-compose -f resources/docker/docker-compose.yml --env-file .env exec api sh -c "go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck -show verbose ./..."
+	@echo "詳細な脆弱性チェックを実行中..."
+	@cd api && go run golang.org/x/vuln/cmd/govulncheck@latest -show verbose ./...
 
-# Generate OpenAPI code locally
+# OpenAPIコードをローカルで生成
 generate:
-	@echo "Installing oapi-codegen..."
+	@echo "oapi-codegenをインストール中..."
 	@cd api && go install github.com/deepmap/oapi-codegen/cmd/oapi-codegen@latest
-	@echo "Generating OpenAPI code..."
+	@echo "OpenAPIコードを生成中..."
 	@mkdir -p api/gen
 	@cd api && oapi-codegen -package gen -generate types,server,spec ../resources/openapi/openapi.yaml > gen/openapi.gen.go
-	@echo "OpenAPI code generated successfully!"
+	@echo "OpenAPIコードの生成が完了しました！"
 
-# Open shell in API container
+# APIコンテナのシェルを開く
 shell-api:
 	docker-compose -f resources/docker/docker-compose.yml --env-file .env exec api sh
 
-# Open MySQL CLI
+# MySQL CLIを開く
 mysql-cli:
 	docker-compose -f resources/docker/docker-compose.yml --env-file .env exec mysql mysql -uroot -ppassword testdb
 
-# Open Redis CLI
+# Redis CLIを開く
 redis-cli:
 	docker-compose -f resources/docker/docker-compose.yml --env-file .env exec redis redis-cli
 
-# Open Swagger UI in browser
+# Swagger UIをブラウザで開く
 swagger:
-	@echo "Opening Swagger UI at http://localhost:8081/swagger"
+	@echo "Swagger UIを開きます: http://localhost:8081/swagger"
 	@command -v xdg-open > /dev/null && xdg-open http://localhost:8081/swagger || \
 	command -v open > /dev/null && open http://localhost:8081/swagger || \
-	echo "Please open http://localhost:8081/swagger in your browser"
+	echo "ブラウザで http://localhost:8081/swagger を開いてください"
 
-# Initial setup
+# 初期セットアップ
 setup: generate build up
-	@echo "Waiting for services to be ready..."
+	@echo "サービスが起動するまで待機中..."
 	@sleep 10
-	@echo "Setup complete! API is running at http://localhost:8080"
-	@echo "Try: curl http://localhost:8080/health"
+	@echo "セットアップ完了！APIは http://localhost:8080 で動作しています"
+	@echo "試してみましょう: curl http://localhost:8080/health"
 
-# Run load test (detailed with JSON output)
+# 負荷テストを実行（詳細なJSON出力）
 load-test:
-	@echo "Starting load test with detailed output..."
-	@echo "Press Ctrl+C to stop"
+	@echo "詳細出力付きで負荷テストを開始します..."
+	@echo "停止するには Ctrl+C を押してください"
 	@./scripts/load_test.sh
 
-# Run simple load test (compact output)
+# シンプルな負荷テストを実行（コンパクト出力）
 load-test-simple:
-	@echo "Starting simple load test..."
-	@echo "Press Ctrl+C to stop"
+	@echo "シンプルな負荷テストを開始します..."
+	@echo "停止するには Ctrl+C を押してください"
 	@./scripts/simple_load_test.sh
 
-# Run complex load test (tests JOIN queries on posts API)
+# 複雑な負荷テストを実行（JOINクエリをテスト）
 load-test-complex:
-	@echo "Starting complex load test with JOIN queries..."
-	@echo "Press Ctrl+C to stop"
+	@echo "JOINクエリを含む複雑な負荷テストを開始します..."
+	@echo "停止するには Ctrl+C を押してください"
 	@./scripts/complex_load_test.sh
